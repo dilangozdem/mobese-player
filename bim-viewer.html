@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BIM Model Görüntüleyici</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card: #111827;
+      --border: #1e293b;
+      --accent: #3b82f6;
+      --text: #f1f5f9;
+      --dim: #94a3b8;
+      --muted: #64748b;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html, body {
+      width:100%; height:100%;
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    .bim-dot {
+      width: 8px; height: 8px;
+      background: var(--accent);
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .header .label {
+      font-size: 11px; font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--dim);
+    }
+    .header .model-name {
+      font-size: 11px; font-weight: 600;
+      color: var(--text);
+    }
+    .actions {
+      display: flex; gap: 5px;
+      margin-left: auto;
+    }
+    .btn {
+      padding: 4px 10px;
+      font-size: 10px; font-weight: 600;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: transparent;
+      color: var(--dim);
+      cursor: pointer;
+      transition: all 0.15s;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      text-decoration: none;
+    }
+    .btn:hover {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .file-wrap { position: relative; }
+    .file-wrap input[type="file"] {
+      position: absolute; inset:0; opacity:0; cursor:pointer;
+    }
+
+    /* ── 3D Canvas ── */
+    .canvas-wrap {
+      flex: 1; min-height: 0;
+      position: relative;
+      cursor: grab;
+    }
+    .canvas-wrap:active { cursor: grabbing; }
+    .canvas-wrap canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    /* ── Overlay ── */
+    .overlay {
+      position: absolute; inset:0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 12px;
+      background: rgba(11,15,25,0.88);
+      z-index: 5;
+      text-align: center;
+      padding: 24px;
+    }
+    .overlay.hidden { display: none; }
+    .spinner {
+      width: 30px; height: 30px;
+      border: 3px solid #222;
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .overlay-text {
+      font-size: 13px; color: var(--dim);
+      line-height: 1.6;
+    }
+    .overlay-text strong { color: var(--text); }
+    .overlay-icon { font-size: 36px; opacity: 0.4; }
+
+    /* ── Model Selector ── */
+    .model-btns {
+      display: flex; gap: 4px;
+      flex-wrap: wrap;
+    }
+    .model-btn {
+      padding: 3px 8px;
+      font-size: 10px; font-weight: 600;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      background: transparent;
+      color: var(--dim);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .model-btn:hover, .model-btn.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    /* ── Info Bar ── */
+    .info-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 6px 14px;
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      font-size: 10px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    .info-bar kbd {
+      padding: 1px 5px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-family: inherit;
+      font-size: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <span class="bim-dot"></span>
+    <span class="label">BIM Model</span>
+    <span class="model-name" id="model-name"></span>
+    <div class="actions">
+      <div class="model-btns" id="model-btns"></div>
+      <div class="file-wrap">
+        <button class="btn">📂 Dosya Yükle</button>
+        <input type="file" id="file-input" accept=".glb,.gltf,.ifc,.obj">
+      </div>
+      <button class="btn" id="btn-reset" title="Görünümü sıfırla">⟳ Sıfırla</button>
+      <button class="btn" id="btn-wireframe" title="Tel kafes görünümü">◻ Wireframe</button>
+    </div>
+  </div>
+
+  <div class="canvas-wrap" id="canvas-wrap">
+    <div class="overlay" id="loading">
+      <div class="spinner"></div>
+      <div class="overlay-text" id="loading-text">Model yükleniyor…</div>
+    </div>
+    <div class="overlay hidden" id="empty">
+      <div class="overlay-icon">🏗️</div>
+      <div class="overlay-text">
+        <strong>3D BIM Görüntüleyici</strong><br>
+        Yukarıdan model seçin veya dosya yükleyin<br>
+        <span style="font-size:11px;color:var(--muted)">GLB, glTF, IFC desteklenir</span>
+      </div>
+    </div>
+    <div class="overlay hidden" id="error">
+      <div class="overlay-icon">⚠️</div>
+      <div class="overlay-text">
+        <strong>Model yüklenemedi</strong><br>
+        <span id="error-detail"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-bar">
+    <span><kbd>Sol tık</kbd> Döndür</span>
+    <span><kbd>Scroll</kbd> Yakınlaştır</span>
+    <span><kbd>Sağ tık</kbd> Kaydır</span>
+    <span id="poly-count"></span>
+  </div>
+</div>
+
+<!-- Three.js -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── Demo BIM modelleri (ücretsiz GLB'ler) ──
+  var defaultModels = [
+    {
+      name: 'Ördek (Test)',
+      url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/Duck/glTF-Binary/Duck.glb'
+    },
+    {
+      name: 'Avokado',
+      url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/Avocado/glTF-Binary/Avocado.glb'
+    },
+    {
+      name: 'Helmet',
+      url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/DamagedHelmet/glTF-Binary/DamagedHelmet.glb'
+    }
+  ];
+
+  // ── URL parametreleri ──
+  var params = new URLSearchParams(window.location.search);
+  var bimUrl = params.get('bim_url') || params.get('bim') || params.get('url') || '';
+  var bimName = params.get('bim_name') || params.get('name') || '';
+
+  var models = [];
+  if (bimUrl) {
+    models = [{ name: bimName || 'BIM Model', url: bimUrl }];
+  } else {
+    models = defaultModels;
+  }
+
+  // ── Three.js Setup ──
+  var container = document.getElementById('canvas-wrap');
+  var scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0b0f19);
+
+  var camera = new THREE.PerspectiveCamera(
+    50, container.clientWidth / container.clientHeight, 0.001, 5000
+  );
+  camera.position.set(3, 3, 3);
+
+  var renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.3;
+  container.appendChild(renderer.domElement);
+
+  var controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.minDistance = 0.01;
+  controls.maxDistance = 500;
+
+  // Işıklar
+  scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+  var dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+  dirLight.position.set(20, 30, 10);
+  dirLight.castShadow = true;
+  scene.add(dirLight);
+  scene.add(new THREE.HemisphereLight(0xb1e1ff, 0xb97a20, 0.4));
+
+  // Grid
+  var grid = new THREE.GridHelper(50, 50, 0x1e293b, 0x111827);
+  scene.add(grid);
+
+  // Resize
+  new ResizeObserver(function() {
+    var w = container.clientWidth, h = container.clientHeight;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  }).observe(container);
+
+  // Render loop
+  (function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  })();
+
+  // ── Model butonları ──
+  var btnsEl = document.getElementById('model-btns');
+  models.forEach(function(m, i) {
+    var btn = document.createElement('button');
+    btn.className = 'model-btn';
+    btn.textContent = m.name;
+    btn.addEventListener('click', function() { loadModelFromUrl(m.url, m.name, i); });
+    btnsEl.appendChild(btn);
+  });
+
+  // Dosya yükleme
+  document.getElementById('file-input').addEventListener('change', function(e) {
+    if (e.target.files.length) loadModelFromFile(e.target.files[0]);
+  });
+
+  // Sıfırla
+  document.getElementById('btn-reset').addEventListener('click', function() {
+    camera.position.set(3, 3, 3);
+    controls.target.set(0, 0, 0);
+    controls.update();
+  });
+
+  // Wireframe toggle
+  var wireframeOn = false;
+  document.getElementById('btn-wireframe').addEventListener('click', function() {
+    wireframeOn = !wireframeOn;
+    this.style.background = wireframeOn ? 'var(--accent)' : '';
+    this.style.color = wireframeOn ? '#fff' : '';
+    scene.traverse(function(c) {
+      if (c.isMesh && c.material) {
+        if (Array.isArray(c.material)) {
+          c.material.forEach(function(m) { m.wireframe = wireframeOn; });
+        } else {
+          c.material.wireframe = wireframeOn;
+        }
+      }
+    });
+  });
+
+  // Eğer parametre ile URL geldiyse otomatik yükle
+  if (bimUrl) {
+    loadModelFromUrl(bimUrl, bimName || 'Model', 0);
+  } else {
+    // İlk demo modeli otomatik yükle
+    hide('loading');
+    loadModelFromUrl(models[0].url, models[0].name, 0);
+  }
+
+  // ── GLTFLoader dinamik yükleme ──
+  var gltfLoaderReady = false;
+  var gltfQueue = [];
+
+  function ensureGLTFLoader(cb) {
+    if (gltfLoaderReady) return cb();
+    gltfQueue.push(cb);
+    if (gltfQueue.length === 1) {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/GLTFLoader.js';
+      s.onload = function() {
+        gltfLoaderReady = true;
+        gltfQueue.forEach(function(fn) { fn(); });
+        gltfQueue = [];
+      };
+      document.head.appendChild(s);
+    }
+  }
+
+  // ── Model yükleme ──
+  var currentModel = null;
+
+  function loadModelFromUrl(url, name, btnIndex) {
+    document.getElementById('model-name').textContent = name;
+    setActiveBtn(btnIndex);
+    show('loading'); hide('error'); hide('empty');
+    document.getElementById('loading-text').textContent = 'Model indiriliyor…';
+
+    var ext = getExt(url);
+    if (ext === 'glb' || ext === 'gltf' || ext === '') {
+      ensureGLTFLoader(function() {
+        var loader = new THREE.GLTFLoader();
+        loader.load(
+          url,
+          function(gltf) { onModelLoaded(gltf.scene, name); },
+          function(xhr) {
+            if (xhr.total > 0) {
+              document.getElementById('loading-text').textContent =
+                'İndiriliyor… %' + Math.round(xhr.loaded / xhr.total * 100);
+            }
+          },
+          function(err) { showError(err.message || 'Model yüklenirken hata oluştu.'); }
+        );
+      });
+    } else {
+      showError('Desteklenmeyen format. GLB veya glTF kullanın.');
+    }
+  }
+
+  function loadModelFromFile(file) {
+    document.getElementById('model-name').textContent = file.name;
+    setActiveBtn(-1);
+    show('loading'); hide('error'); hide('empty');
+    document.getElementById('loading-text').textContent = 'Dosya okunuyor…';
+
+    var name = file.name.toLowerCase();
+    var url = URL.createObjectURL(file);
+
+    if (name.endsWith('.glb') || name.endsWith('.gltf')) {
+      ensureGLTFLoader(function() {
+        var loader = new THREE.GLTFLoader();
+        loader.load(
+          url,
+          function(gltf) { onModelLoaded(gltf.scene, file.name); },
+          function(xhr) {
+            if (xhr.total > 0) {
+              document.getElementById('loading-text').textContent =
+                'Yükleniyor… %' + Math.round(xhr.loaded / xhr.total * 100);
+            }
+          },
+          function(err) { showError(err.message || 'Dosya yüklenirken hata.'); }
+        );
+      });
+    } else if (name.endsWith('.ifc')) {
+      showError(
+        'IFC formatı doğrudan desteklenmiyor.<br>' +
+        '<strong>Öneri:</strong> Revit veya Blender ile GLB\'ye çevirip yükleyin.'
+      );
+    } else {
+      showError('Desteklenmeyen format. GLB veya glTF kullanın.');
+    }
+  }
+
+  function onModelLoaded(obj, name) {
+    // Eski modeli kaldır
+    if (currentModel) {
+      scene.remove(currentModel);
+      disposeObject(currentModel);
+    }
+    currentModel = obj;
+    scene.add(obj);
+    fitCamera(obj);
+    hide('loading');
+
+    // Polygon sayısı
+    var tris = 0;
+    obj.traverse(function(c) {
+      if (c.isMesh && c.geometry) {
+        var geo = c.geometry;
+        if (geo.index) tris += geo.index.count / 3;
+        else if (geo.attributes.position) tris += geo.attributes.position.count / 3;
+      }
+    });
+    document.getElementById('poly-count').textContent =
+      '▲ ' + Math.round(tris).toLocaleString('tr-TR') + ' üçgen';
+
+    // Wireframe durumunu uygula
+    if (wireframeOn) {
+      obj.traverse(function(c) {
+        if (c.isMesh && c.material) {
+          if (Array.isArray(c.material)) c.material.forEach(function(m) { m.wireframe = true; });
+          else c.material.wireframe = true;
+        }
+      });
+    }
+  }
+
+  function fitCamera(obj) {
+    var box = new THREE.Box3().setFromObject(obj);
+    var center = box.getCenter(new THREE.Vector3());
+    var size = box.getSize(new THREE.Vector3());
+    var maxDim = Math.max(size.x, size.y, size.z);
+    var fov = camera.fov * (Math.PI / 180);
+    var dist = maxDim / (2 * Math.tan(fov / 2)) * 1.5;
+
+    camera.position.copy(center);
+    camera.position.x += dist * 0.7;
+    camera.position.y += dist * 0.5;
+    camera.position.z += dist * 0.7;
+    camera.lookAt(center);
+    controls.target.copy(center);
+    controls.update();
+  }
+
+  function disposeObject(obj) {
+    obj.traverse(function(c) {
+      if (c.geometry) c.geometry.dispose();
+      if (c.material) {
+        (Array.isArray(c.material) ? c.material : [c.material]).forEach(function(m) {
+          if (m.map) m.map.dispose();
+          if (m.normalMap) m.normalMap.dispose();
+          m.dispose();
+        });
+      }
+    });
+  }
+
+  function setActiveBtn(index) {
+    var btns = btnsEl.querySelectorAll('.model-btn');
+    btns.forEach(function(b, i) { b.classList.toggle('active', i === index); });
+  }
+
+  function showError(msg) {
+    hide('loading');
+    document.getElementById('error-detail').innerHTML = msg;
+    show('error');
+  }
+
+  function show(id) { document.getElementById(id).classList.remove('hidden'); }
+  function hide(id) { document.getElementById(id).classList.add('hidden'); }
+  function getExt(url) {
+    try { var p = new URL(url).pathname.split('.'); return p.length > 1 ? p.pop().toLowerCase() : ''; }
+    catch(e) { var p2 = url.split('.'); return p2.length > 1 ? p2.pop().toLowerCase().split('?')[0] : ''; }
+  }
+})();
+</script>
+
+</body>
+</html>
