@@ -1,33 +1,87 @@
 <!DOCTYPE html>
-<html>
+<html lang="tr">
 <head>
   <meta charset="UTF-8">
-  <title>Canlı Kamera</title>
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ArcGIS Pop-up Araçları</title>
   <style>
-    body { margin: 0; background: black; }
-    video { width: 100%; height: 100vh; }
+    :root {
+      --bg: #0b0f19;
+      --card: #111827;
+      --border: #1e293b;
+      --accent: #3b82f6;
+      --text: #f1f5f9;
+      --dim: #94a3b8;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      min-height: 100vh;
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .hub { max-width: 520px; width: 100%; }
+    .hub h1 { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+    .hub p { font-size: 13px; color: var(--dim); margin-bottom: 24px; line-height: 1.6; }
+    .cards { display: flex; flex-direction: column; gap: 12px; }
+    .card {
+      display: flex; align-items: center; gap: 14px;
+      padding: 16px; background: var(--card);
+      border: 1px solid var(--border); border-radius: 8px;
+      text-decoration: none; color: var(--text); transition: all 0.2s;
+    }
+    .card:hover {
+      border-color: var(--accent); transform: translateY(-1px);
+      box-shadow: 0 4px 20px rgba(59,130,246,0.15);
+    }
+    .card .icon {
+      font-size: 28px; flex-shrink: 0; width: 48px; height: 48px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg); border-radius: 8px;
+    }
+    .card .info h2 { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+    .card .info span { font-size: 11px; color: var(--dim); }
+    hr { margin: 24px 0 16px; border: none; border-top: 1px solid var(--border); }
+    .usage { font-size: 12px; color: var(--dim); line-height: 1.7; }
+    .usage code {
+      background: var(--card); padding: 2px 6px; border-radius: 3px;
+      font-size: 11px; color: var(--accent); border: 1px solid var(--border);
+    }
   </style>
 </head>
 <body>
-  <video id="video" controls autoplay muted></video>
-  <script>
-    var video = document.getElementById('video');
-    var videoSrc = 'https:\\hls.ibb.gov.tr\ls\cam_turistik\b_beyazitkule.stream\playlist.m3u8';
-    
-    if (Hls.isSupported()) {
-      var hls = new Hls();
-      hls.loadSource(videoSrc);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, function () {
-        video.play();
-      });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = videoSrc;
-      video.addEventListener('loadedmetadata', function () {
-        video.play();
-      });
-    }
-  </script>
+<div class="hub">
+  <h1>ArcGIS Pop-up Araclari</h1>
+  <p>ArcGIS Enterprise pop-up pencerelerinde iframe ile gomulmek uzere tasarlanmis hafif web uygulamalari.</p>
+  <div class="cards">
+    <a class="card" href="camera.html">
+      <div class="icon">📹</div>
+      <div class="info">
+        <h2>Canli Kamera Yayini</h2>
+        <span>HLS (.m3u8) stream player — autoplay, responsive, sade arayuz</span>
+      </div>
+    </a>
+    <a class="card" href="bim-viewer.html">
+      <div class="icon">🏗️</div>
+      <div class="info">
+        <h2>BIM Model Goruntleyici</h2>
+        <span>3D model viewer — GLB/glTF destegi, dondurme, zoom, wireframe</span>
+      </div>
+    </a>
+  </div>
+  <hr>
+  <div class="usage">
+    <strong>ArcGIS Pop-up'ta Kullanim:</strong><br><br>
+    <strong>Kamera:</strong><br>
+    <code>&lt;iframe src="./camera.html?camera_url={camera_url}"&gt;</code><br><br>
+    <strong>BIM:</strong><br>
+    <code>&lt;iframe src="./bim-viewer.html?bim_url={bim_url}"&gt;</code><br><br>
+    <code>{camera_url}</code> ve <code>{bim_url}</code> ArcGIS attribute alanlaridir.
+  </div>
+</div>
 </body>
 </html>
