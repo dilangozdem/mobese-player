@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Canlı Kamera</title>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card: #111827;
+      --border: #1e293b;
+      --accent: #ef4444;
+      --text: #f1f5f9;
+      --dim: #94a3b8;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    /* ── Header Bar ── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .live-dot {
+      width: 8px; height: 8px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: blink 1.5s ease-in-out infinite;
+    }
+    @keyframes blink {
+      0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(239,68,68,0.5); }
+      50%     { opacity:0.6; box-shadow: 0 0 0 5px rgba(239,68,68,0); }
+    }
+    .header .label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--dim);
+    }
+    .header .cam-name {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text);
+      margin-left: 4px;
+    }
+
+    /* ── Video ── */
+    .video-wrap {
+      flex: 1;
+      position: relative;
+      background: #000;
+      min-height: 0;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+    }
+
+    /* ── Overlay States ── */
+    .overlay {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 10px;
+      background: rgba(0,0,0,0.8);
+      z-index: 5;
+      text-align: center;
+      padding: 20px;
+    }
+    .overlay.hidden { display: none; }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid #333;
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .overlay-text {
+      font-size: 13px;
+      color: var(--dim);
+      line-height: 1.6;
+    }
+    .overlay-text strong { color: var(--text); }
+    .overlay-icon { font-size: 32px; opacity: 0.5; }
+
+    /* ── Camera selector ── */
+    .cam-selector {
+      display: flex;
+      gap: 4px;
+      margin-left: auto;
+      flex-wrap: wrap;
+    }
+    .cam-btn {
+      padding: 3px 8px;
+      font-size: 10px;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      background: transparent;
+      color: var(--dim);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .cam-btn:hover, .cam-btn.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <span class="live-dot"></span>
+    <span class="label">CANLI</span>
+    <span class="cam-name" id="cam-name"></span>
+    <div class="cam-selector" id="cam-selector"></div>
+  </div>
+  <div class="video-wrap">
+    <video id="video" controls autoplay muted playsinline></video>
+    <div class="overlay" id="loading">
+      <div class="spinner"></div>
+      <div class="overlay-text">Kamera yayınına bağlanılıyor…</div>
+    </div>
+    <div class="overlay hidden" id="error">
+      <div class="overlay-icon">📡</div>
+      <div class="overlay-text">
+        <strong>Yayına erişilemiyor</strong><br>
+        <span id="error-detail"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── Varsayılan Kameralar (demo amaçlı — THY kendi URL'lerini koyar) ──
+  var defaultCameras = [
+    {
+      name: 'Kız Kulesi',
+      url: 'https://livestream.ibb.gov.tr/cam_turistik/cam_trsk_kiz_kulesi_1.stream/playlist.m3u8'
+    },
+    {
+      name: 'Eminönü',
+      url: 'https://livestream.ibb.gov.tr/cam_turistik/cam_trsk_eminonu.stream/playlist.m3u8'
+    },
+    {
+      name: 'Sultanahmet',
+      url: 'https://livestream.ibb.gov.tr/cam_turistik/cam_trsk_sultanahmet.stream/playlist.m3u8'
+    },
+    {
+      name: 'Büyük Çamlıca',
+      url: 'https://livestream.ibb.gov.tr/cam_turistik/cam_trsk_buyuk_camlica.stream/playlist.m3u8'
+    }
+  ];
+
+  // ── URL parametreleri ──
+  var params = new URLSearchParams(window.location.search);
+  var paramUrl = params.get('camera_url') || params.get('cam') || params.get('url') || '';
+  var paramName = params.get('camera_name') || params.get('name') || '';
+
+  var cameras = [];
+  if (paramUrl) {
+    cameras = [{ name: paramName || 'Kamera', url: paramUrl }];
+  } else {
+    cameras = defaultCameras;
+  }
+
+  // ── UI ──
+  var video = document.getElementById('video');
+  var nameEl = document.getElementById('cam-name');
+  var selectorEl = document.getElementById('cam-selector');
+  var currentHls = null;
+
+  // Kamera butonları oluştur
+  if (cameras.length > 1) {
+    cameras.forEach(function(cam, i) {
+      var btn = document.createElement('button');
+      btn.className = 'cam-btn';
+      btn.textContent = cam.name;
+      btn.addEventListener('click', function() { loadCamera(i); });
+      selectorEl.appendChild(btn);
+    });
+  }
+
+  // İlk kamerayı yükle
+  loadCamera(0);
+
+  function loadCamera(index) {
+    var cam = cameras[index];
+    nameEl.textContent = cam.name;
+
+    // Buton aktifliği
+    var btns = selectorEl.querySelectorAll('.cam-btn');
+    btns.forEach(function(b, i) {
+      b.classList.toggle('active', i === index);
+    });
+
+    show('loading');
+    hide('error');
+
+    // Önceki HLS instance'ı temizle
+    if (currentHls) {
+      currentHls.destroy();
+      currentHls = null;
+    }
+
+    if (Hls.isSupported()) {
+      var hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        maxBufferLength: 8,
+        maxMaxBufferLength: 15,
+        startFragPrefetch: true
+      });
+      currentHls = hls;
+
+      hls.loadSource(cam.url);
+      hls.attachMedia(video);
+
+      hls.on(Hls.Events.MANIFEST_PARSED, function() {
+        hide('loading');
+        video.play().catch(function(){});
+      });
+
+      hls.on(Hls.Events.ERROR, function(ev, data) {
+        if (data.fatal) {
+          hide('loading');
+          document.getElementById('error-detail').textContent =
+            data.type + ': ' + data.details;
+          show('error');
+
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+            setTimeout(function() { hls.startLoad(); }, 3000);
+          } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+            hls.recoverMediaError();
+          }
+        }
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = cam.url;
+      video.addEventListener('loadedmetadata', function() {
+        hide('loading');
+        video.play().catch(function(){});
+      });
+    } else {
+      hide('loading');
+      document.getElementById('error-detail').textContent =
+        'Bu tarayıcı HLS formatını desteklemiyor.';
+      show('error');
+    }
+  }
+
+  function show(id) { document.getElementById(id).classList.remove('hidden'); }
+  function hide(id) { document.getElementById(id).classList.add('hidden'); }
+})();
+</script>
+
+</body>
+</html>
