@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canlı Şantiye Kamerası</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+        .header {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 44px;
+            background: rgba(26, 58, 107, 0.95);
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            z-index: 10;
+            gap: 10px;
+        }
+        .live-dot {
+            width: 10px; height: 10px;
+            background: #dc2626;
+            border-radius: 50%;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        .header-text {
+            color: #fff;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+        }
+        .header-sub {
+            color: rgba(255,255,255,0.7);
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            margin-left: auto;
+        }
+        iframe {
+            position: fixed;
+            top: 44px;
+            left: 0;
+            width: 100%;
+            height: calc(100% - 44px);
+            border: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="live-dot"></div>
+        <span class="header-text">CANLI</span>
+        <span class="header-text" id="camTitle">Şantiye Kamerası</span>
+        <span class="header-sub" id="timeDisplay"></span>
+    </div>
+    <iframe id="ytPlayer" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
+    <script>
+        var params = new URLSearchParams(window.location.search);
+        var videoId = params.get('v') || 'dmEq_ddk0kw';
+        var title = params.get('title') || 'Şantiye Kamerası';
+        document.getElementById('camTitle').textContent = title;
+        document.title = 'CANLI - ' + title;
+        document.getElementById('ytPlayer').src = 'https://www.youtube.com/embed/' + videoId + '?autoplay=1&mute=1&rel=0&modestbranding=1&controls=1&showinfo=0';
+        function updateTime() {
+            var now = new Date();
+            document.getElementById('timeDisplay').textContent = 
+                String(now.getHours()).padStart(2,'0') + ':' + 
+                String(now.getMinutes()).padStart(2,'0') + ':' + 
+                String(now.getSeconds()).padStart(2,'0');
+        }
+        updateTime();
+        setInterval(updateTime, 1000);
+    </script>
+</body>
+</html>
